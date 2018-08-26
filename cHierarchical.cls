@@ -9,7 +9,6 @@ Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 'author: Pong Yue Hin - https://github.com/yhpong
 
-
 Option Explicit
 
 Private pn_raw As Long
@@ -25,10 +24,19 @@ Private plink_type As String
 Private pswapped_Z() As Long
 Private pswapped_Z_height() As Double
 Private pclustered_items() As Variant
+Private pclusters() As Variant
+
+Private Sub Class_Initialize()
+
+    Call Reset
+
+End Sub
+
 
 Sub Reset()
-    Erase pZ, pZ_height, plabel, pleaf_order, psizes, pxy_plot
+    Erase pZ, pZ_height, pleaf_order, psizes, pxy_plot ' plabel
     Erase pparents, pDistance, pswapped_Z, pswapped_Z_height
+    Erase pclustered_items, pclusters
 End Sub
 
 Public Property Get z() As Long()
@@ -60,9 +68,80 @@ Public Property Get parents() As Long()
 parents = pparents
 End Property
 
-Public Property Get clustered_items() As Variant()
+Public Property Get clustered_items() As Variant
 'Added by Daniel Grass
 'Return an array with all labels and the corresponding clusters
+
+    Call cluster_items
+    clustered_items = pclustered_items
+    
+End Property
+
+
+Public Property Get clusters() As Variant
+'Added by Daniel Grass
+'Return an array with all clusters and the corresponding labels
+    
+    Dim i As Long
+    Dim i_no_of_enties As Long
+    Dim i_max_depth As Long
+    Dim i_col_in As Long
+    Dim i_row_in As Long
+    Dim i_row_out As Long: i_row_out = 1
+    Dim i_no_of_clusters As Long
+    Dim tmp_clusters() As Long
+    
+    
+    
+    'make sure we have the matrix of clustered items
+    If IsEmpty(pclustered_items) Then
+        Call cluster_items
+    End If
+
+    'calculate the number of entries required to list all clusters with all lables
+    For i = LBound(psizes) To UBound(psizes)
+        If psizes(i) > 1 Then
+            'do not count single item clusters as we do not
+            'return them in clustered_items array
+            i_no_of_enties = i_no_of_enties + psizes(i)
+        End If
+    Next i
+
+    'size the output array
+    ReDim pclusters(0 To 0, 0 To 0)
+    ReDim pclusters(1 To i_no_of_enties, 1 To 2)
+    
+    'get the number of clusters and size the tmp_clusters array so we can store clusters we already worked on
+    i_no_of_clusters = UBound(pparents) - LBound(pparents) + 1
+    ReDim tmp_clusters(1 To i_no_of_clusters)
+    i_max_depth = UBound(pclustered_items, 2)
+    
+    'fill the tmp_clusters array with the max number of rows
+    For i = 1 To i_no_of_clusters
+        tmp_clusters(i) = i_max_depth
+    Next i
+    
+    'walk through the clustered_items array and create the output
+    For i_col_in = 2 To UBound(pclustered_items, 2)
+        For i_row_in = 1 To UBound(pclustered_items)
+            'only process clusters if the are not yet processed in a previous column (i.e. already complete)
+            If tmp_clusters(pclustered_items(i_row_in, i_col_in)) >= i_col_in Then
+                pclusters(i_row_out, 1) = pclustered_items(i_row_in, i_col_in)
+                pclusters(i_row_out, 2) = pclustered_items(i_row_in, 1)
+                tmp_clusters(pclustered_items(i_row_in, i_col_in)) = i_col_in
+                i_row_out = i_row_out + 1
+            End If
+        Next i_row_in
+    Next i_col_in
+    
+    clusters = pclusters
+
+End Property
+
+
+Private Sub cluster_items()
+'Added by Daniel Grass
+'crates an array with all labels and the corresponding clusters
 
     Dim i As Long
     Dim ii As Long
@@ -142,13 +221,8 @@ Public Property Get clustered_items() As Variant()
         
     Next i
 
-    clustered_items = pclustered_items
-
-End Property
-
-Sub printParents()
-
 End Sub
+
 
 
 '=== Direct Implementation of agglomoerative clustering
@@ -528,7 +602,7 @@ Dim vR() As Long, vG() As Long, vB() As Long
 Dim temp As Double, temp_min As Double, temp_max As Double
 
 n_raw = UBound(d, 1)
-If n_raw <> pn_raw Then vRng.Value = "Matrix size does not match tree"
+If n_raw <> pn_raw Then vRng.value = "Matrix size does not match tree"
 
 ReDim vR(1 To n_raw, 1 To n_raw)
 ReDim vG(1 To n_raw, 1 To n_raw)
@@ -604,9 +678,9 @@ Dim i As Long, j As Long, u As Long, v As Long, w As Long
     With vRng
         For i = 1 To pn_raw
             j = pleaf_order(i)
-            .Offset(j - 1, 0).Value = plabel(i)
-            .Offset(j - 1, 1).Value = pxy_plot(i, 1)
-            .Offset(j - 1, 2).Value = pxy_plot(i, 2)
+            .Offset(j - 1, 0).value = plabel(i)
+            .Offset(j - 1, 1).value = pxy_plot(i, 1)
+            .Offset(j - 1, 2).value = pxy_plot(i, 2)
         Next i
         If circular = False Then
             j = 0
@@ -614,14 +688,14 @@ Dim i As Long, j As Long, u As Long, v As Long, w As Long
                 w = pn_raw + i
                 u = pZ(i, 2)
                 v = pZ(i, 3)
-                .Offset(i + j - 1, 3).Value = pxy_plot(u, 1)
-                .Offset(i + j - 1, 4).Value = pxy_plot(u, 2)
-                .Offset(i + j, 3).Value = pxy_plot(w, 1)
-                .Offset(i + j, 4).Value = pxy_plot(u, 2)
-                .Offset(i + j + 1, 3).Value = pxy_plot(w, 1)
-                .Offset(i + j + 1, 4).Value = pxy_plot(v, 2)
-                .Offset(i + j + 2, 3).Value = pxy_plot(v, 1)
-                .Offset(i + j + 2, 4).Value = pxy_plot(v, 2)
+                .Offset(i + j - 1, 3).value = pxy_plot(u, 1)
+                .Offset(i + j - 1, 4).value = pxy_plot(u, 2)
+                .Offset(i + j, 3).value = pxy_plot(w, 1)
+                .Offset(i + j, 4).value = pxy_plot(u, 2)
+                .Offset(i + j + 1, 3).value = pxy_plot(w, 1)
+                .Offset(i + j + 1, 4).value = pxy_plot(v, 2)
+                .Offset(i + j + 2, 3).value = pxy_plot(v, 1)
+                .Offset(i + j + 2, 4).value = pxy_plot(v, 2)
                 j = j + 4
             Next i
         Else
@@ -630,12 +704,12 @@ Dim i As Long, j As Long, u As Long, v As Long, w As Long
                 w = pn_raw + i
                 u = pZ(i, 2)
                 v = pZ(i, 3)
-                .Offset(i + j - 1, 3).Value = pxy_plot(u, 1)
-                .Offset(i + j - 1, 4).Value = pxy_plot(u, 2)
-                .Offset(i + j, 3).Value = pxy_plot(w, 1)
-                .Offset(i + j, 4).Value = pxy_plot(w, 2)
-                .Offset(i + j + 1, 3).Value = pxy_plot(v, 1)
-                .Offset(i + j + 1, 4).Value = pxy_plot(v, 2)
+                .Offset(i + j - 1, 3).value = pxy_plot(u, 1)
+                .Offset(i + j - 1, 4).value = pxy_plot(u, 2)
+                .Offset(i + j, 3).value = pxy_plot(w, 1)
+                .Offset(i + j, 4).value = pxy_plot(w, 2)
+                .Offset(i + j + 1, 3).value = pxy_plot(v, 1)
+                .Offset(i + j + 1, 4).value = pxy_plot(v, 2)
                 j = j + 3
             Next i
         End If
@@ -1368,3 +1442,5 @@ Next i
 iQueue(1) = k
 End Sub
 '=============================================================
+
+
